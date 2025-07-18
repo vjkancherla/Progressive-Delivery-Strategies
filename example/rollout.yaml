@@ -1,0 +1,54 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: rollouts-demo
+spec:
+  replicas: 4
+  strategy:
+    canary:
+      # Reference to a Service which the controller updates to point to the canary ReplicaSet
+      canaryService: rollouts-demo-canary
+      # Reference to a Service which the controller updates to point to the stable ReplicaSet
+      stableService: rollouts-demo-stable
+      trafficRouting:
+        istio:
+          # One or more virtualServices can be configured
+          # Reference to a VirtualService which the controller updates with canary weights
+          virtualServices:
+          - name: rollouts-demo-vsvc # At least one virtualService is required
+            routes:
+            - primary # At least one route is required
+      
+      # Steps define sequence of steps to take during an update of the
+      # canary. Skipped upon initial deploy of a rollout. +optional
+      steps:
+      - setWeight: 20 # Sets the ratio of canary ReplicaSet to 20%
+      - pause: {} # Pauses indefinitely until manually resumed
+      - setWeight: 40
+      - pause: {duration: 1m} # Pauses the rollout for 1 minute
+      - setWeight: 60
+      - pause: {duration: 1m} # Pauses the rollout for 1 minute
+      - setWeight: 80
+      - pause: {duration: 1m} # Pauses the rollout for 1 minute
+      - setWeight: 100
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: rollouts-demo
+  template:
+    metadata:
+      labels:
+        app: rollouts-demo
+        istio-injection: enabled
+    spec:
+      containers:
+      - name: rollouts-demo
+        image: argoproj/rollouts-demo:blue
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        resources:
+          requests:
+            memory: 32Mi
+            cpu: 5m
